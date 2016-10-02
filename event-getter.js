@@ -9,22 +9,21 @@ const app = feathers()
   .configure(socketio(socket));
 
 const eventService = app.service('events');
-eventService.on('created', message => console.log('Created a message\n', message));
-eventService.on('updated', message => console.log('Updated a message\n', message));
+eventService.on('created', event => console.log('Created an event\n', event));
+eventService.on('updated', event => console.log('Updated an event\n', event));
 
 const fetch = require('node-fetch');
 const ical = require('ical');
 
 require('babel-polyfill');
 
-function extractEvent(event) {
-  console.log(event);
+function convertGoogleEvent(googleEvent) {
   var newEvent = {}
-  newEvent.id = event.uid;
-  newEvent.title = event.summary;
-  newEvent.description = event.description;
-  newEvent.startDate = new Date(event.start.getTime());
-  newEvent.endDate = new Date(event.end.getTime());
+  newEvent.id = googleEvent.uid;
+  newEvent.title = googleEvent.summary;
+  newEvent.description = googleEvent.description;
+  newEvent.startDate = new Date(googleEvent.start.getTime());
+  newEvent.endDate = new Date(googleEvent.end.getTime());
   newEvent.owner = "joel";
   return newEvent
 }
@@ -36,42 +35,24 @@ fetch(cal_url)
 
   const cal = ical.parseICS(data);
   const allEvents = Object.values(cal);
-  allEvents.forEach(event => {
-    
+  allEvents.forEach(googleEvent => {
+
+    eventService.get(googleEvent.uid)
+    .then(serverEvent => {
+      console.log('event existed');
+      const convertedEvent = convertGoogleEvent(googleEvent);
+      eventService.update(convertedEvent.id, convertedEvent).catch(err => console.log(err))
+    })
+    .catch(error => {
+      console.log('event could not be found')
+      if(error.code === 404) {
+        const convertedEvent = convertGoogleEvent(googleEvent);
+        eventService.create(convertedEvent).catch(err => console.log(err))
+      }
+    })
+
   })
-  console.log(Object.values(cal));
-  // for(var k in cal) {
-  //   if(cal.hasOwnProperty(k)) {
-  //     var event = cal[k];
-  //     console.log('id for ' + event.summary + ' is ' + event.uid);
-  //
-  //     eventService.get(event.uid)
-  //     .then(event => {
-  //       eventService.update(event.id, extractEvent(event)).catch(err => console.log(err))
-  //     })
-  //     .catch(error => {
-  //       console.log(error)
-  //       if(error.code === 404) {
-  //         eventService.create(extractEvent(event)).catch(err => console.log(err))
-  //       }
-  //     });
-  //   }
-  // }
 })
 .catch(err => console.log("fail"))
 
-
 // eventService.find({query: { "$select": ["title", "startDate"] }}).then(events => console.log(events));
-
-// eventService.create({
-//   title: "Funny event",
-//   startDate: new Date(),
-//   endDate: new Date(),
-//   description: "This is a test event",
-//   owner: 1
-// }).then(event => console.log(event))
-// .catch(err => console.log(err));
-
-// eventService.find().then(events => console.log(events));
-
-cal_url = "https://calendar.google.com/calendar/ical/jbb16vovta1s5dinh36b5homi8%40group.calendar.google.com/public/basic.ics"
